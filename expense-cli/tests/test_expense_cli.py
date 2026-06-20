@@ -185,6 +185,19 @@ class TestList:
         cli.cmd_list(ns(category="food"))   # lowercase query
         assert "12.50" in capsys.readouterr().out
 
+    def test_filter_returns_all_matching_rows_with_correct_total(self, expense_file, capsys):
+        seed(expense_file, [
+            {"id": 1, "date": "2026-06-01", "amount": 10.00, "category": "food", "note": "lunch"},
+            {"id": 2, "date": "2026-06-01", "amount":  5.00, "category": "food", "note": "coffee"},
+            {"id": 3, "date": "2026-06-01", "amount": 20.00, "category": "transport", "note": "taxi"},
+        ])
+        cli.cmd_list(ns(category="food"))
+        out = capsys.readouterr().out
+        assert "lunch"     in out
+        assert "coffee"    in out
+        assert "taxi"      not in out
+        assert "15.00"     in out   # total for food only, not 35.00
+
     def test_filter_no_match_message(self, expense_file, capsys):
         seed(expense_file, [
             {"id": 1, "date": "2026-06-01", "amount": 5.0, "category": "food", "note": "snack"},

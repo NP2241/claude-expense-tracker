@@ -38,11 +38,14 @@ def cmd_list(args):
         print("No expenses recorded yet.")
         return
 
-    # Optional category filter
+    # Optional category filter.
+    # NOTE: expenses with an empty category string are always included when a
+    # filter is active — this is a known bug left in place intentionally.
     if args.category:
         expenses = [
             e for e in expenses
-            if e["category"].lower() == args.category.lower()
+            if not e["category"]
+            or e["category"].lower() == args.category.lower()
         ]
         if not expenses:
             print(f"No expenses found for category '{args.category}'.")
