@@ -1,1 +1,2 @@
-expense-cli/
+# expenses data file (generated at runtime)
+expenses.json
