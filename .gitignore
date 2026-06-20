@@ -1,5 +1,7 @@
-# expenses data file (generated at runtime)
-expenses.json
+# runtime data files (generated on first use)
+expenses.db
+expenses.db-wal
+expenses.db-shm
 
 # virtual environments
 .venv/

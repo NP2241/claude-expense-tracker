@@ -3,20 +3,21 @@
 from datetime import date
 
 
-def create_expense(amount: float, category: str, note: str,
-                   existing: list) -> dict:
+def create_expense(amount: float, category: str, note: str) -> dict:
     """Build a new expense dict ready for storage.
 
-    Handles id generation, date stamping, cent rounding, and whitespace
-    stripping.  Raises ``ValueError`` if *amount* is not positive.
+    Handles date stamping, cent rounding, and whitespace stripping.
+    Raises ``ValueError`` if *amount* is not positive.
+
+    The ``id`` field is intentionally absent — the storage layer assigns
+    it via SQLite AUTOINCREMENT on insert.
     """
     if amount <= 0:
         raise ValueError("amount must be a positive number")
 
     return {
-        "id": (existing[-1]["id"] + 1) if existing else 1,
-        "date": str(date.today()),
-        "amount": round(amount, 2),
+        "date":     str(date.today()),
+        "amount":   round(amount, 2),
         "category": category.strip(),
-        "note": note.strip(),
+        "note":     note.strip(),
     }

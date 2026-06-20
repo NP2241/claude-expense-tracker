@@ -18,15 +18,13 @@ CSV_FIELDS = ["id", "date", "amount", "category", "note"]
 
 def cmd_add(args):
     """Append a new expense entry."""
-    expenses = storage.load()
     try:
-        entry = create_expense(args.amount, args.category, args.note, expenses)
+        entry = create_expense(args.amount, args.category, args.note)
     except ValueError as exc:
         sys.exit(f"Error: {exc}")
-    expenses.append(entry)
-    storage.save(expenses)
+    assigned_id = storage.add(entry)
     print(
-        f"Added expense #{entry['id']}: "
+        f"Added expense #{assigned_id}: "
         f"${entry['amount']:.2f} [{entry['category']}] - {entry['note']}"
     )
 
@@ -152,14 +150,7 @@ def cmd_import_csv(args):
         print("No expenses to import.")
         return
 
-    expenses = storage.load()
-    next_id = (expenses[-1]["id"] + 1) if expenses else 1
-    for row in rows:
-        row["id"] = next_id
-        next_id += 1
-        expenses.append(row)
-
-    storage.save(expenses)
+    storage.add_many(rows)
     print(f"Imported {len(rows)} expense(s).")
 
 
