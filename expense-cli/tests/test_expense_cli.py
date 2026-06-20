@@ -273,6 +273,38 @@ class TestSummary:
         cli.cmd_summary(ns(month="2020-01"))
         assert "No expenses found" in capsys.readouterr().out
 
+    def test_category_filter_shows_only_matching_total(self, expense_file, capsys):
+        seed(expense_file, [
+            {"id": 1, "date": "2026-06-01", "amount": 10.0, "category": "food",      "note": "a"},
+            {"id": 2, "date": "2026-06-01", "amount":  5.0, "category": "food",      "note": "b"},
+            {"id": 3, "date": "2026-06-01", "amount": 20.0, "category": "transport", "note": "c"},
+        ])
+        cli.cmd_summary(ns(category="food"))
+        out = capsys.readouterr().out
+        assert "food"      in out
+        assert "transport" not in out
+        assert "15.00"     in out   # food subtotal = grand total when filtered
+        assert "20.00"     not in out
+
+    def test_category_filter_no_match_message(self, expense_file, capsys):
+        seed(expense_file, [
+            {"id": 1, "date": "2026-06-01", "amount": 10.0, "category": "food", "note": "a"},
+        ])
+        cli.cmd_summary(ns(category="travel"))
+        assert "No expenses found" in capsys.readouterr().out
+
+    def test_category_and_month_filter_combined(self, expense_file, capsys):
+        seed(expense_file, [
+            {"id": 1, "date": "2026-01-01", "amount": 10.0, "category": "food",      "note": "jan food"},
+            {"id": 2, "date": "2026-01-01", "amount": 30.0, "category": "transport", "note": "jan transport"},
+            {"id": 3, "date": "2026-06-01", "amount": 99.0, "category": "food",      "note": "jun food"},
+        ])
+        cli.cmd_summary(ns(month="2026-01", category="food"))
+        out = capsys.readouterr().out
+        assert "10.00"     in out    # only the jan food expense
+        assert "30.00"     not in out
+        assert "99.00"     not in out
+
 
 # ---------------------------------------------------------------------------
 # export-csv

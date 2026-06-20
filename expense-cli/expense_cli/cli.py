@@ -79,11 +79,21 @@ def cmd_summary(args):
         print("No expenses recorded yet.")
         return
 
-    # Optional month filter (YYYY-MM)
+    # Optional month filter (YYYY-MM).
     if args.month:
         expenses = [e for e in expenses if e["date"].startswith(args.month)]
         if not expenses:
             print(f"No expenses found for {args.month}.")
+            return
+
+    # Optional category filter (case-insensitive exact match).
+    if args.category:
+        expenses = [
+            e for e in expenses
+            if e["category"].lower() == args.category.lower()
+        ]
+        if not expenses:
+            print(f"No expenses found for category '{args.category}'.")
             return
 
     totals = {}
@@ -95,7 +105,11 @@ def cmd_summary(args):
     grand_total = sum(totals.values())
     width = max(len(c) for c in totals)
 
-    title = f"Summary{f' for {args.month}' if args.month else ''}"
+    title = "Summary"
+    if args.month:
+        title += f" for {args.month}"
+    if args.category:
+        title += f" [{args.category}]"
     print(f"\n{title}")
     print("=" * (width + 14))
     for category, total in sorted(totals.items(), key=lambda x: x[1],
@@ -202,6 +216,10 @@ def build_parser():
     p_summary.add_argument(
         "--month", "-m", default=None, metavar="YYYY-MM",
         help="Restrict summary to a specific month (e.g. 2026-06)",
+    )
+    p_summary.add_argument(
+        "--category", "-c", default=None,
+        help="Restrict summary to a single category (case-insensitive)",
     )
     p_summary.set_defaults(func=cmd_summary)
 
