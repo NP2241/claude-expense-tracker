@@ -1,2 +1,11 @@
 # expenses data file (generated at runtime)
 expenses.json
+
+# virtual environments
+.venv/
+venv/
+
+# pytest / Python caches
+.pytest_cache/
+__pycache__/
+*.pyc
