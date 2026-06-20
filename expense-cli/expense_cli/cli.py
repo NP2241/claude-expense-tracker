@@ -1,31 +1,10 @@
-#!/usr/bin/env python3
-"""expense-cli: A minimal command-line expense tracker."""
+"""Command handlers and argparse wiring for expense-cli."""
 
 import argparse
-import json
-import os
 import sys
-from datetime import date
 
-EXPENSES_FILE = os.path.join(os.getcwd(), "expenses.json")
-
-
-# ---------------------------------------------------------------------------
-# Storage helpers
-# ---------------------------------------------------------------------------
-
-def _load() -> list:
-    """Load expenses from disk, returning an empty list if the file is missing."""
-    if not os.path.exists(EXPENSES_FILE):
-        return []
-    with open(EXPENSES_FILE, "r", encoding="utf-8") as fh:
-        return json.load(fh)
-
-
-def _save(expenses: list) -> None:
-    """Persist expenses to disk."""
-    with open(EXPENSES_FILE, "w", encoding="utf-8") as fh:
-        json.dump(expenses, fh, indent=2)
+from expense_cli import storage
+from expense_cli.models import create_expense
 
 
 # ---------------------------------------------------------------------------
@@ -34,32 +13,32 @@ def _save(expenses: list) -> None:
 
 def cmd_add(args):
     """Append a new expense entry."""
-    if args.amount <= 0:
-        sys.exit("Error: amount must be a positive number.")
-
-    expenses = _load()
-    entry = {
-        "id": (expenses[-1]["id"] + 1) if expenses else 1,
-        "date": str(date.today()),
-        "amount": round(args.amount, 2),
-        "category": args.category.strip(),
-        "note": args.note.strip(),
-    }
+    expenses = storage.load()
+    try:
+        entry = create_expense(args.amount, args.category, args.note, expenses)
+    except ValueError as exc:
+        sys.exit(f"Error: {exc}")
     expenses.append(entry)
-    _save(expenses)
-    print(f"Added expense #{entry['id']}: ${entry['amount']:.2f} [{entry['category']}] - {entry['note']}")
+    storage.save(expenses)
+    print(
+        f"Added expense #{entry['id']}: "
+        f"${entry['amount']:.2f} [{entry['category']}] - {entry['note']}"
+    )
 
 
 def cmd_list(args):
     """Print all expenses in a formatted table."""
-    expenses = _load()
+    expenses = storage.load()
     if not expenses:
         print("No expenses recorded yet.")
         return
 
     # Optional category filter
     if args.category:
-        expenses = [e for e in expenses if e["category"].lower() == args.category.lower()]
+        expenses = [
+            e for e in expenses
+            if e["category"].lower() == args.category.lower()
+        ]
         if not expenses:
             print(f"No expenses found for category '{args.category}'.")
             return
@@ -90,7 +69,7 @@ def cmd_list(args):
 
 def cmd_summary(args):
     """Print spending totals grouped by category."""
-    expenses = _load()
+    expenses = storage.load()
     if not expenses:
         print("No expenses recorded yet.")
         return
@@ -104,7 +83,9 @@ def cmd_summary(args):
 
     totals = {}
     for e in expenses:
-        totals[e["category"]] = round(totals.get(e["category"], 0.0) + e["amount"], 2)
+        totals[e["category"]] = round(
+            totals.get(e["category"], 0.0) + e["amount"], 2
+        )
 
     grand_total = sum(totals.values())
     width = max(len(c) for c in totals)
@@ -112,7 +93,8 @@ def cmd_summary(args):
     title = f"Summary{f' for {args.month}' if args.month else ''}"
     print(f"\n{title}")
     print("=" * (width + 14))
-    for category, total in sorted(totals.items(), key=lambda x: x[1], reverse=True):
+    for category, total in sorted(totals.items(), key=lambda x: x[1],
+                                  reverse=True):
         bar = "X" * min(int(total / grand_total * 20), 20)
         print(f"  {category:<{width}}  ${total:>8.2f}  {bar}")
     print("=" * (width + 14))
@@ -134,9 +116,12 @@ def build_parser():
 
     # --- add ---
     p_add = sub.add_parser("add", help="Record a new expense")
-    p_add.add_argument("amount", type=float, help="Expense amount (e.g. 12.50)")
-    p_add.add_argument("category", help="Category label (e.g. food, travel)")
-    p_add.add_argument("note", help="Short description of the expense")
+    p_add.add_argument("amount", type=float,
+                       help="Expense amount (e.g. 12.50)")
+    p_add.add_argument("category",
+                       help="Category label (e.g. food, travel)")
+    p_add.add_argument("note",
+                       help="Short description of the expense")
     p_add.set_defaults(func=cmd_add)
 
     # --- list ---
@@ -148,7 +133,8 @@ def build_parser():
     p_list.set_defaults(func=cmd_list)
 
     # --- summary ---
-    p_summary = sub.add_parser("summary", help="Show spending totals by category")
+    p_summary = sub.add_parser("summary",
+                               help="Show spending totals by category")
     p_summary.add_argument(
         "--month", "-m", default=None, metavar="YYYY-MM",
         help="Restrict summary to a specific month (e.g. 2026-06)",
@@ -162,7 +148,3 @@ def main():
     parser = build_parser()
     args = parser.parse_args()
     args.func(args)
-
-
-if __name__ == "__main__":
-    main()
