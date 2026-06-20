@@ -1,6 +1,8 @@
-"""Tests for expense_cli — add, list, and summary commands."""
+"""Tests for expense_cli — add, list, summary, export-csv, and import-csv."""
 
 import argparse
+import csv
+import io
 import json
 
 import pytest
@@ -34,7 +36,7 @@ def ns(**kwargs):
     Mirrors the attributes argparse would populate; only supply what the
     command under test actually reads.
     """
-    defaults = {"amount": None, "category": None, "note": None, "month": None}
+    defaults = {"amount": None, "category": None, "note": None, "month": None, "path": None}
     defaults.update(kwargs)
     return argparse.Namespace(**defaults)
 
@@ -210,3 +212,143 @@ class TestSummary:
         ])
         cli.cmd_summary(ns(month="2020-01"))
         assert "No expenses found" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# export-csv
+# ---------------------------------------------------------------------------
+
+class TestExportCsv:
+
+    def test_header_always_written_on_empty_store(self, capsys):
+        cli.cmd_export_csv(ns())
+        out = capsys.readouterr().out
+        assert out.startswith("id,date,amount,category,note")
+
+    def test_exports_all_rows(self, expense_file, capsys):
+        seed(expense_file, [
+            {"id": 1, "date": "2026-06-01", "amount": 12.5,  "category": "food",      "note": "lunch"},
+            {"id": 2, "date": "2026-06-02", "amount":  3.0,  "category": "transport", "note": "bus"},
+        ])
+        cli.cmd_export_csv(ns())
+        out = capsys.readouterr().out
+        rows = list(csv.reader(io.StringIO(out)))
+        # header + 2 data rows
+        assert len(rows) == 3
+        assert rows[1] == ["1", "2026-06-01", "12.5",  "food",      "lunch"]
+        assert rows[2] == ["2", "2026-06-02",  "3.0",  "transport", "bus"]
+
+    def test_amount_has_no_dollar_sign(self, expense_file, capsys):
+        seed(expense_file, [
+            {"id": 1, "date": "2026-06-01", "amount": 9.99, "category": "misc", "note": "thing"},
+        ])
+        cli.cmd_export_csv(ns())
+        out = capsys.readouterr().out
+        # dollar signs must only appear in the human-readable commands, not CSV
+        assert "$" not in out
+
+    def test_output_is_valid_csv(self, expense_file, capsys):
+        seed(expense_file, [
+            {"id": 1, "date": "2026-06-01", "amount": 5.0, "category": "food", "note": 'a "quoted" note'},
+        ])
+        cli.cmd_export_csv(ns())
+        out = capsys.readouterr().out
+        rows = list(csv.reader(io.StringIO(out)))
+        assert rows[0] == ["id", "date", "amount", "category", "note"]
+        assert rows[1][4] == 'a "quoted" note'
+
+
+# ---------------------------------------------------------------------------
+# import-csv
+# ---------------------------------------------------------------------------
+
+class TestImportCsv:
+
+    # Helper: write a well-formed CSV file in tmp_path
+    def _write_csv(self, tmp_path, rows, filename="import.csv"):
+        p = tmp_path / filename
+        with open(p, "w", newline="", encoding="utf-8") as fh:
+            writer = csv.DictWriter(fh, fieldnames=cli.CSV_FIELDS)
+            writer.writeheader()
+            writer.writerows(rows)
+        return p
+
+    def test_imports_expenses_from_csv(self, expense_file, tmp_path):
+        csv_path = self._write_csv(tmp_path, [
+            {"id": 1, "date": "2026-01-10", "amount": 15.0,  "category": "food",  "note": "lunch"},
+            {"id": 2, "date": "2026-01-11", "amount":  4.5,  "category": "transport", "note": "bus"},
+        ])
+        cli.cmd_import_csv(ns(path=str(csv_path)))
+        data = json.loads(expense_file.read_text())
+        assert len(data) == 2
+        assert data[0]["category"] == "food"
+        assert data[1]["category"] == "transport"
+
+    def test_ids_are_reassigned_from_one_on_empty_store(self, expense_file, tmp_path):
+        # CSV may have arbitrary IDs; they should be ignored and reassigned
+        csv_path = self._write_csv(tmp_path, [
+            {"id": 99, "date": "2026-01-10", "amount": 10.0, "category": "food", "note": "a"},
+            {"id": 42, "date": "2026-01-11", "amount": 20.0, "category": "food", "note": "b"},
+        ])
+        cli.cmd_import_csv(ns(path=str(csv_path)))
+        data = json.loads(expense_file.read_text())
+        assert [e["id"] for e in data] == [1, 2]
+
+    def test_ids_continue_after_existing(self, expense_file, tmp_path):
+        seed(expense_file, [
+            {"id": 1, "date": "2026-01-01", "amount": 5.0, "category": "food", "note": "existing"},
+            {"id": 2, "date": "2026-01-02", "amount": 5.0, "category": "food", "note": "existing"},
+        ])
+        csv_path = self._write_csv(tmp_path, [
+            {"id": 1, "date": "2026-02-01", "amount": 7.0, "category": "misc", "note": "imported"},
+        ])
+        cli.cmd_import_csv(ns(path=str(csv_path)))
+        data = json.loads(expense_file.read_text())
+        assert len(data) == 3
+        assert data[2]["id"] == 3   # continues from max existing id
+
+    def test_appends_to_existing_expenses(self, expense_file, tmp_path):
+        seed(expense_file, [
+            {"id": 1, "date": "2026-01-01", "amount": 5.0, "category": "food", "note": "kept"},
+        ])
+        csv_path = self._write_csv(tmp_path, [
+            {"id": 99, "date": "2026-02-01", "amount": 8.0, "category": "misc", "note": "new"},
+        ])
+        cli.cmd_import_csv(ns(path=str(csv_path)))
+        data = json.loads(expense_file.read_text())
+        # original row preserved
+        assert data[0]["note"] == "kept"
+        assert data[1]["note"] == "new"
+
+    def test_empty_csv_reports_nothing_to_import(self, tmp_path, capsys):
+        csv_path = self._write_csv(tmp_path, [])   # header only, no data rows
+        cli.cmd_import_csv(ns(path=str(csv_path)))
+        assert "No expenses to import." in capsys.readouterr().out
+
+    def test_prints_imported_count(self, tmp_path, capsys):
+        csv_path = self._write_csv(tmp_path, [
+            {"id": 1, "date": "2026-01-10", "amount": 5.0, "category": "food", "note": "a"},
+            {"id": 2, "date": "2026-01-11", "amount": 6.0, "category": "food", "note": "b"},
+            {"id": 3, "date": "2026-01-12", "amount": 7.0, "category": "food", "note": "c"},
+        ])
+        cli.cmd_import_csv(ns(path=str(csv_path)))
+        assert "3" in capsys.readouterr().out
+
+    def test_missing_file_exits(self, tmp_path):
+        with pytest.raises(SystemExit):
+            cli.cmd_import_csv(ns(path=str(tmp_path / "nonexistent.csv")))
+
+    def test_invalid_amount_exits(self, tmp_path):
+        p = tmp_path / "bad.csv"
+        p.write_text("id,date,amount,category,note\n1,2026-01-01,not-a-number,food,lunch\n",
+                     encoding="utf-8")
+        with pytest.raises(SystemExit):
+            cli.cmd_import_csv(ns(path=str(p)))
+
+    def test_missing_column_exits(self, tmp_path):
+        p = tmp_path / "bad.csv"
+        # 'amount' column deliberately omitted
+        p.write_text("id,date,category,note\n1,2026-01-01,food,lunch\n",
+                     encoding="utf-8")
+        with pytest.raises(SystemExit):
+            cli.cmd_import_csv(ns(path=str(p)))
