@@ -47,6 +47,30 @@ def seed(path, expenses):
 
 
 # ---------------------------------------------------------------------------
+# storage
+# ---------------------------------------------------------------------------
+
+class TestStorage:
+
+    def test_trailing_whitespace_and_blank_lines_load_successfully(self, expense_file):
+        # Files written by external tools often have a trailing newline or
+        # blank lines; they must not cause a parse error or alter the data.
+        expense_file.write_text(
+            '[{"id": 1, "date": "2026-01-01", "amount": 5.0, "category": "food", "note": "a"}]'
+            "\n\n   \n",
+            encoding="utf-8",
+        )
+        data = storage.load()
+        assert len(data) == 1
+        assert data[0]["id"] == 1
+
+    def test_corrupt_json_exits_with_clear_message(self, expense_file):
+        expense_file.write_text("[{broken json", encoding="utf-8")
+        with pytest.raises(SystemExit, match="invalid JSON"):
+            storage.load()
+
+
+# ---------------------------------------------------------------------------
 # add
 # ---------------------------------------------------------------------------
 
