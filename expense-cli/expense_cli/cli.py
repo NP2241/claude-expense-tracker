@@ -172,6 +172,9 @@ def build_parser():
         prog="expense-cli",
         description="Track your expenses from the command line.",
     )
+    parser.add_argument(
+        "--version", action="version", version="expense-cli 0.1.0",
+    )
     sub = parser.add_subparsers(dest="command", metavar="<command>")
     sub.required = True
 

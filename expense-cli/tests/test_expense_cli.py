@@ -47,6 +47,19 @@ def seed(path, expenses):
 
 
 # ---------------------------------------------------------------------------
+# CLI — top-level flags
+# ---------------------------------------------------------------------------
+
+class TestCLI:
+
+    def test_version_flag_prints_version_and_exits(self, capsys):
+        with pytest.raises(SystemExit) as exc_info:
+            cli.build_parser().parse_args(["--version"])
+        assert exc_info.value.code == 0
+        assert "expense-cli 0.1.0" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
 # storage
 # ---------------------------------------------------------------------------
 
