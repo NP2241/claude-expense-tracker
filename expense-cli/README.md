@@ -117,23 +117,16 @@ python -m expense_cli import-csv /path/to/backup.csv
 
 ## Data file
 
-Expenses are stored in an SQLite database (`expenses.db`) in the current
-working directory.  The file is created automatically on first use.
+Expenses are saved to `expenses.json` in the current working directory:
 
-Schema:
-
-```sql
-CREATE TABLE expenses (
-    id       INTEGER PRIMARY KEY AUTOINCREMENT,
-    date     TEXT    NOT NULL,
-    amount   REAL    NOT NULL,
-    category TEXT    NOT NULL,
-    note     TEXT    NOT NULL
-);
-```
-
-You can inspect the database directly with the `sqlite3` CLI:
-
-```bash
-sqlite3 expenses.db "SELECT * FROM expenses;"
+```json
+[
+  {
+    "id": 1,
+    "date": "2026-06-20",
+    "amount": 12.5,
+    "category": "food",
+    "note": "Lunch at the deli"
+  }
+]
 ```
